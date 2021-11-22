@@ -6,6 +6,7 @@ from flask_jwt_extended import create_access_token, create_refresh_token, jwt_re
 from flask import current_app as app
 from flask_restx import Namespace, Resource
 
+from helpers.common import status_code_responses, is_admin
 from app.models.user import User
 
 _user_parser = reqparse.RequestParser()
@@ -36,6 +37,43 @@ _user_parser.add_argument(
 
 api = Namespace('users', path='/api', description='Users')
 
+@api.route('/register')
+@api.doc(responses=status_code_responses,
+         security=['apitoken']
+        )
+class UserRegister(Resource):
+    def post(self):
+        data = _user_parser.parse_args()
+
+        username = data["username"]
+
+        if User.find_user_by_username(data["username"]):
+            return {
+                    "message": "User {} exists!".format(data["username"])
+            }, 400
+
+        user = User(username, hashlib.sha256(data["password"].encode("utf-8")).hexdigest(), data["name"], data["email"])
+
+        try:            
+            user.save_to_db()
+            return {
+                    "message": "User {} created!".format(username)
+            }, 200
+        except:
+            return {
+                    "message": "The user {} was not saved in the database.".format(username)
+            }, 500
+
+class Users(Resource):
+    @api.doc(description='Get User by username')
+    def get(self, username):
+        user = User.find_user_by_username(username)
+        if user:
+            return user.json()
+
+        return {
+                "message": "User not found!"
+        }, 404
 
 @api.route('/login')
 class UserLogin(Resource):
